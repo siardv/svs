@@ -1,9 +1,15 @@
 
+# install.packages("haven")
+# install.packages("tidyverse"")
+# install.packages("magrittr")
+# install.packages("readxl")
+# install.packages("xlsx")
 
 library(haven)
 library(tidyverse)
 library(magrittr)
 library(readxl)
+library(xlsx)
 
 ####### DEEL 1 #######
 
@@ -238,7 +244,7 @@ for (i in 1:nrow(dataset)) {
         as.numeric()
     }
   } else if (dataset[i, c("antwoord_communicatie_a", "antwoord_communicatie_b")] %>%
-    unlist() %>% is.na() %>% which() %>% length() == 2) {
+    unlist() %>% is.na() %>% which() %>% length() == 0) {
     
     reactie_resp <-
       dataset$antwoord_communicatie[i] %>%
@@ -246,6 +252,7 @@ for (i in 1:nrow(dataset)) {
       {
         gsub("0", "10", .)
       } %>%
+      as.character() %>%
       as.numeric()
     
     reactie_tijd <-
@@ -257,12 +264,11 @@ for (i in 1:nrow(dataset)) {
       str_split(",", 2) %>%
       map(~ as.character(.) %>%
         as.numeric()) %>%
-      .[[1]]
-    reactie_a_b <-
-      reactie_tijd[sort(reactie_resp, index.return = TRUE)[[2]]]
-    
-    dataset$antwoord_communicatie_reactietijd_a2[i] <- as.numeric(reactie_a_b[1])
-    dataset$antwoord_communicatie_reactietijd_b2[i] <- reactie_a_b[2]
+      .[[1]] %>% 
+      .[sort(reactie_resp, index.return = TRUE)[[2]]] %>% as.numeric()
+
+    dataset$antwoord_communicatie_reactietijd_a2[i] <- reactie_tijd[1]
+    dataset$antwoord_communicatie_reactietijd_b2[i] <- reactie_tijd[2]
   }
 }
 
@@ -274,9 +280,15 @@ dataset$antwoord_communicatie_reactietijd_a <-
 
 dataset$antwoord_communicatie_reactietijd_b <-
   map2(
-    dataset$antwoord_communicatie_reactietijd_b2,
+    dataset$antwoord_communicatie_reactietijd_b1,
     dataset$antwoord_communicatie_reactietijd_b2, ~ ifelse(is.na(.x), .y, .x)
   ) %>% unlist()
+
+dataset %<>% select(!c(
+  antwoord_communicatie_reactietijd_a1,
+  antwoord_communicatie_reactietijd_a2,
+  antwoord_communicatie_reactietijd_b1,
+  antwoord_communicatie_reactietijd_b2))
 
 dataset %<>% select(
   participant,
