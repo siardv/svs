@@ -218,4 +218,4 @@ add_leeftijd <- function(.df, yyyymmdd) {
 dataset_4 <- add_leeftijd(dataset_3, "2019-01-01")
 
 
-haven::write_sav(dataset_3, "dataset.sav")
+haven::write_sav(dataset_4, "dataset.sav")
