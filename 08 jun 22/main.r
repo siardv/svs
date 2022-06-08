@@ -31,8 +31,7 @@ xlsx_to_df <- function(.file) {
     fix_names()
 }
 
-dataset <-
-  xlsx_to_df("Data experiment.xlsx")
+dataset <- xlsx_to_df("Data experiment.xlsx")
 
 dataset %>%
   mutate(across(
@@ -46,6 +45,7 @@ dataset$participant_a2_1 <-
   unlist() %>%
   map_lgl(~ grepl("1", .)) %>%
   ifelse(1, NA)
+
 dataset$participant_a2_2 <-
   select(dataset, antwoord_flashes) %>%
   unlist() %>%
@@ -73,115 +73,79 @@ dataset$participant_b2 <-
     dataset$participant_b2_2, ~ ifelse(is.na(.x), .y, .x)
   ) %>% unlist()
 
-more_than_2 <-
-  dataset %>%
-  select(antwoord_flashes) %>%
-  unlist() %>%
-  str_split("") %>%
-  map(~ keep(., grepl("1|2|7|8", .))) %>%
-  {
-    which(lengths(.) > 2)
-  }
-
-# dataset %>% select(antwoord_flashes) %>% unlist() %>% str_split("") %>% map(~discard(., grepl("\\[|\\]|\\'|\"| ", .)))
-
-reactietijd_index <-
-  dataset %>%
-  select(antwoord_flashes) %>%
-  unlist() %>%
-  str_split("") %>%
-  map(~ keep(., grepl("1|2|7|8", .))) %>%
-  map_if(~ `==`(length(.), 2), ~.x, .else = 0) %>%
-  # keep(~is.null(.) %>% not()) %>%
-  map(~ as.numeric(.) %>%
-    {
-      c(which.min(.), which.max(.))
-    })
-
-reactietijd_values <-
-  dataset %>%
-  select(antwoord_flash_reactietijd) %>%
-  unlist() %>%
-  {
-    gsub("\\]|\\[|[ ]+", "", .)
-  } %>%
-  str_split(",", 2) %>%
-  map(~ as.character(.) %>%
-    as.numeric())
-
-ls_temp <-
-  list(reactietijd_index, reactietijd_values) %>%
-  transpose() %>%
-  map(~ .[[2]][sort(.[[1]], index.return = TRUE)[[2]]])
-
-dataset$antwoord_flash_reactietijd_a1 <-
-  dataset$antwoord_flash_reactietijd_b1 <-
-  dataset$antwoord_flash_reactietijd_a2 <-
-  dataset$antwoord_flash_reactietijd_a2 <-
-  NA_real_
-
-
-for (i in 1:length(ls_temp)) {
-  cat("row: ", i, "\r")
-  if (length(ls_temp[[i]]) == 2) {
-    dataset$antwoord_flash_reactietijd_a1[[i]] <- ls_temp[[i]][[1]]
-    dataset$antwoord_flash_reactietijd_b1[[i]] <- ls_temp[[i]][[2]]
-  }
+get_values <- function(.df, .colname) {
+  .df[.colname] %>%
+    unlist() %>%
+    map(~ gsub("EN", ",", .) %>%
+      {
+        gsub("\\]|\\[|[ ]+|'", "", .)
+      } %>%
+      {
+        ifelse(grepl(",", .),
+          list(str_split(., ",")),
+          list(.)
+        ) %>%
+          unlist()
+      } %>%
+      as.character() %>%
+      as.numeric())
 }
 
-sc <-
-  dataset$antwoord_flash_reactietijd %>%
-  map(~ str_match_all(., ".") %>%
-    length(.)) %>%
-  unlist()
+antwoord_flashes_values <- get_values(dataset, "antwoord_flashes")
+antwoord_flash_reactietijd_values <- get_values(dataset, "antwoord_flash_reactietijd")
 
-afrt <- dataset$antwoord_flash_reactietijd %>%
-  {
-    gsub("\\[([0-9]+.[0-9]+)\\]", "\\1", .)
-  } %>%
-  map_dbl(~ as.numeric(.))
+reactietijd <- map2(
+  antwoord_flashes_values, antwoord_flash_reactietijd_values,
+  ~ list(
+    c(
+      .x[which(`%in%`(.x, 1:2))][1],
+      .x[which(`%in%`(.x, 7:8))][1]
+    ) %>% .[!is.na(.)],
+    c(
+      .y[which(`%in%`(.x, 1:2))][1],
+      .y[which(`%in%`(.x, 7:8))][1]
+    ) %>% .[!is.na(.)]
+  )
+)
 
-for (i in 1:length(sc)) {
-  cat("row: ", i, "\r")
-  if (!is.na(cs[i])) {
-    if (cs[i] == 1) {
-      if (any(dataset$participant_a[i] %in% 1:2)) {
-        dataset$antwoord_flash_reactietijd_a2[i] <- afrt[i]
-      } else if (any(dataset$participant_b[i] %in% 7:8)) {
-        dataset$antwoord_flash_reactietijd_b2[i] <- afrt[i]
-      }
-    }
-  }
-}
-
+dataset$antwoord_flash_a <-
+  dataset$antwoord_flash_b <- 
 dataset$antwoord_flash_reactietijd_a <-
-  map2(
-    dataset$antwoord_flash_reactietijd_a1,
-    dataset$antwoord_flash_reactietijd_a2, ~ ifelse(is.na(.x), .y, .x)
-  ) %>% unlist()
+  dataset$antwoord_flash_reactietijd_b <- NA
 
-dataset$antwoord_flash_reactietijd_b <-
-  map2(
-    dataset$antwoord_flash_reactietijd_b1,
-    dataset$antwoord_flash_reactietijd_b2, ~ ifelse(is.na(.x), .y, .x)
-  ) %>% unlist()
+for (i in 1:nrow(dataset)) {
+  cat("row: ", i, "\r")
+  if (reactietijd[[i]] %>% lengths() %>% sum() %>% equals(2)) {
+    if (reactietijd[[i]][[1]] <= 2) {
+      dataset$antwoord_flash_a[i] <- reactietijd[[i]][[1]][1]
+      dataset$antwoord_flash_reactietijd_a[i] <- reactietijd[[i]][[2]][1]
+      
+    } else if (reactietijd[[i]][[1]] >= 7) {
+      dataset$antwoord_flash_b[i] <- reactietijd[[i]][[1]][1]
+      dataset$antwoord_flash_reactietijd_b[i] <- reactietijd[[i]][[2]][1]
+    }
+  } else if (reactietijd[[i]] %>% lengths() %>% sum() %>% equals(4)) {
+    
+    x <- reactietijd[[i]][[1]]
+    dataset$antwoord_flash_a[i] <- x[which.min(x)]
+    dataset$antwoord_flash_b[i] <- x[which.max(x)]
+    
+    dataset$antwoord_flash_reactietijd_a[i] <- reactietijd[[i]][[2]][which.min(x)]
+    dataset$antwoord_flash_reactietijd_b[i] <- reactietijd[[i]][[2]][which.max(x)]
+  }
+}
 
 dataset %<>%
   select(!c(
     participant_a2_1,
     participant_a2_2,
     participant_b2_1,
-    participant_b2_2,
-    antwoord_flash_reactietijd_a1,
-    antwoord_flash_reactietijd_a2,
-    antwoord_flash_reactietijd_b1,
-    antwoord_flash_reactietijd_b2
+    participant_b2_2
   ))
-
 
 ####### DEEL 2 #######
 
-dataset <- haven::read_sav("df_2022-06-07.sav")
+# dataset <- haven::read_sav("df_2022-06-07.sav")
 
 antw_comm <-
   dataset %>%
@@ -201,7 +165,6 @@ dataset$antwoord_communicatie_a <-
   dataset$antwoord_communicatie_reactietijd_a2 <-
   dataset$antwoord_communicatie_reactietijd_b1 <-
   dataset$antwoord_communicatie_reactietijd_b2 <-
-  
   NA
 
 for (i in 1:nrow(dataset)) {
@@ -245,7 +208,6 @@ for (i in 1:nrow(dataset)) {
     }
   } else if (dataset[i, c("antwoord_communicatie_a", "antwoord_communicatie_b")] %>%
     unlist() %>% is.na() %>% which() %>% length() == 0) {
-    
     reactie_resp <-
       dataset$antwoord_communicatie[i] %>%
       str_extract_all("[0-9]", simplify = TRUE) %>%
@@ -254,7 +216,7 @@ for (i in 1:nrow(dataset)) {
       } %>%
       as.character() %>%
       as.numeric()
-    
+
     reactie_tijd <-
       dataset$antwoord_communicatie_en_reactietijd[i] %>%
       unlist() %>%
@@ -264,8 +226,9 @@ for (i in 1:nrow(dataset)) {
       str_split(",", 2) %>%
       map(~ as.character(.) %>%
         as.numeric()) %>%
-      .[[1]] %>% 
-      .[sort(reactie_resp, index.return = TRUE)[[2]]] %>% as.numeric()
+      .[[1]] %>%
+      .[sort(reactie_resp, index.return = TRUE)[[2]]] %>%
+      as.numeric()
 
     dataset$antwoord_communicatie_reactietijd_a2[i] <- reactie_tijd[1]
     dataset$antwoord_communicatie_reactietijd_b2[i] <- reactie_tijd[2]
@@ -284,11 +247,16 @@ dataset$antwoord_communicatie_reactietijd_b <-
     dataset$antwoord_communicatie_reactietijd_b2, ~ ifelse(is.na(.x), .y, .x)
   ) %>% unlist()
 
+dataset$participant_a <- dataset$participant_a2
+dataset$participant_b <- dataset$participant_b2
+
 dataset %<>% select(!c(
+  participant_a2, participant_b2,
   antwoord_communicatie_reactietijd_a1,
   antwoord_communicatie_reactietijd_a2,
   antwoord_communicatie_reactietijd_b1,
-  antwoord_communicatie_reactietijd_b2))
+  antwoord_communicatie_reactietijd_b2
+))
 
 dataset %<>% select(
   participant,
@@ -299,18 +267,18 @@ dataset %<>% select(
   antwoord_flashes,
   participant_a,
   participant_b,
-  participant_a2,
-  participant_b2,
   antwoord_flash_reactietijd,
+  antwoord_communicatie,
+  antwoord_communicatie_en_reactietijd,
+  antwoord_flash_a,
+  antwoord_flash_b,
   antwoord_flash_reactietijd_a,
   antwoord_flash_reactietijd_b,
-  antwoord_communicatie,
   antwoord_communicatie_a,
   antwoord_communicatie_b,
-  antwoord_communicatie_en_reactietijd,
   antwoord_communicatie_reactietijd_a,
-  antwoord_communicatie_reactietijd_b
+  antwoord_communicatie_reactietijd_b,
 )
 
 haven::write_sav(dataset, paste0("df_", Sys.Date(), ".sav"))
-xlsx::write.xlsx(dataset, paste0("df_", Sys.Date(), ".xlsx"))
+xlsx::write.xlsx(dataset, paste0("df_", Sys.Date(), ".xlsx"), showNA = FALSE)
