@@ -346,7 +346,8 @@ haven::write_sav(dataset, "dataset.sav")
 # gereageerd als er 1 flash en 1 beep was, in sociale conditie 1. Anders verwoord, dit is de gemiddelde reactietijd van de deelnemer 1a
 # en 1b in sociale conditie 1, op 1 flash en 1 beep.
 
-### DEEL 3
+####### DEEL 4 #######
+
 dataset %<>%
   group_by(participant) %>% 
   mutate(correct_a = equals(flashes, antwoord_flash_a),
